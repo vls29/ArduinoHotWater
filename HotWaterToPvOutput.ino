@@ -3,10 +3,12 @@
 
 ///////// CHANGEABLE VALUES /////////
 
-char pompeii[] = "192.168.0.16";
-int pompeiiPort = 80;
+const char pompeii[] = "192.168.0.16";
+const int pompeiiPort = 28080;
 
-double minutesBetweenCalls = 1.0;
+const char pompeiiService[] = "/hotwater";
+
+const unsigned long millisecondsBetweenCalls = 60000L;
 
 const double temperatureOffset = 0.0;
 
@@ -16,12 +18,10 @@ const double temperatureCalculationOffset = 1.188;
 ///////// CHANGEABLE VALUES ABOVE /////////
 
 EthernetClient pompeiiClient;
-byte mac[] = {
-  0x90, 0xA0, 0xDA, 0x0E, 0x9B, 0xE5};
-char pompeiiService[] = "/pvoutput-post-temp.php";
+const byte mac[] = {0x90, 0xA0, 0xDA, 0x0E, 0x9B, 0xE5};
 
-long counter = 1L;
-long cReadings = 0L;
+unsigned long counter = 1L;
+unsigned long cReadings = 0L;
 
 const int temperatureSensorPin = A0;
 const double analogueRange = 1024.0;
@@ -31,17 +31,13 @@ const double milliVolts = 100.0;
 
 // timing stuff
 unsigned long lastTimeUploaded = millis();
-
-unsigned long millisecondsPerMinute = 60000;
-unsigned long minutesInHour = 60;
-unsigned long timeBetweenCalls = minutesBetweenCalls * millisecondsPerMinute;
-
+unsigned long previousTime = 0UL;
 
 // immersion sensor
 const int immersionSensorPin = A5;
 unsigned long onCount = 0L;
 unsigned long offCount = 0L;
-unsigned int threshold = 20L;
+const unsigned int threshold = 20L;
 
 void setup() {
   Serial.begin(9600);
@@ -50,6 +46,8 @@ void setup() {
 
 void connectToEthernet()
 {
+  unsigned long millisecondsPerMinute = 60000;
+
   // attempt to connect to Wifi network:
   // start the Ethernet connection:
   if (Ethernet.begin(mac) == 0) {
@@ -63,7 +61,7 @@ void connectToEthernet()
 
       if (Ethernet.begin(mac) == 0) {
         Serial.println("Failed to configure Ethernet using DHCP stopping - will need reset");
-        while(true);
+        while (true);
       }
     }
 
@@ -105,7 +103,7 @@ void resetImmersionPlugSensorCounts()
 
 void calculateOnOffStatus(int sensorVal)
 {
-  if( sensorVal < threshold)
+  if ( sensorVal < threshold)
   {
     offCount++;
   }
@@ -116,11 +114,17 @@ void calculateOnOffStatus(int sensorVal)
 }
 
 boolean isTimeToUploadData() {
-  unsigned long time = millis();
+  unsigned long currentTime = millis();
 
-  if( (time - lastTimeUploaded) >= timeBetweenCalls) {
+  if (currentTime < previousTime)  {
+    lastTimeUploaded = currentTime;
+  }
+
+  previousTime = currentTime;
+
+  if ( (currentTime - lastTimeUploaded) >= millisecondsBetweenCalls) {
     Serial.println("Time to upload");
-    lastTimeUploaded = time;
+    lastTimeUploaded = currentTime;
     return true;
   }
   return false;
@@ -128,26 +132,21 @@ boolean isTimeToUploadData() {
 
 int getPeriodImmersionOnOffStatus()
 {
-  Serial.print("On Count: ");
-  Serial.print(onCount);
-  Serial.print(" Off Count: ");
-  Serial.println(offCount);
+  Serial.println("On Count: " + String(onCount) + " Off Count: " + String(offCount));
 
-  if( onCount > offCount)
+  if (onCount > offCount)
   {
     return 10;
   }
-  else
-  {
-    return 0;
-  }
+
+  return 0;
 }
 
 /* Reads the temperature sensor */
 void readTemperatureSensorValue() {
   int sensorVal = analogRead(temperatureSensorPin);
   cReadings = cReadings + sensorVal;
-  counter = counter + 1L;
+  counter++;
 }
 
 void resetReadingsAfterUpload()
@@ -164,26 +163,22 @@ void resetTemperatureSensorCounts()
 
 double calculateAverageTemperatureOverPeriod()
 {
-  Serial.print("Sensor Value: ");
-  Serial.print(averageSensorVal());
+  double averageSensorValue = averageSensorVal();
 
   // convert the ADCreading to voltage
-  double voltageAv = (averageSensorVal()/analogueRange) * voltage;
+  double voltageAv = (averageSensorValue / analogueRange) * voltage;
 
-  Serial.print(", Av Volts: ");
-
-  Serial.print(voltageAv);
-  Serial.print(", degrees C: ");
   double temperatureAv = (voltageAv - offset) * milliVolts;
   temperatureAv = ((temperatureMultiplier * (temperatureAv + temperatureOffset)) + temperatureCalculationOffset);
-  Serial.println(temperatureAv);
+
+  Serial.println("Sensor Value: " + String(averageSensorValue) + ", Av Volts: " + String(voltageAv) + ", degrees C: " + String(temperatureAv));
 
   return temperatureAv;
 }
 
 double averageSensorVal()
 {
-  return (double)cReadings/(double)counter;
+  return (double)cReadings / (double)counter;
 }
 
 void sendResultsToPompeii() {
@@ -195,26 +190,19 @@ void sendResultsToPompeii() {
   if (pompeiiClient.connect(pompeii, pompeiiPort)) {
     Serial.println("connected to pompeii");
     // Make a HTTP request:
-    pompeiiClient.print("POST ");
-    pompeiiClient.print(pompeiiService);
-    pompeiiClient.println(" HTTP/1.1");
-    pompeiiClient.print("Host: ");
-    pompeiiClient.print(pompeii);
-    pompeiiClient.print(":");
-    pompeiiClient.println(pompeiiPort);
-    pompeiiClient.println("Accept: text/html");
-    pompeiiClient.println("Content-Type: application/x-www-form-urlencoded; charset=UTF-8");
-    pompeiiClient.print("Content-Length: ");
-    pompeiiClient.println(postData.length());
+    pompeiiClient.println("POST " + String(pompeiiService) + " HTTP/1.1");
+    pompeiiClient.println("Host: " + String(pompeii) + ":" + pompeiiPort);
+    pompeiiClient.println("Content-Type: application/json");
+    pompeiiClient.println("Content-Length: " + String(postData.length()));
     pompeiiClient.println("Pragma: no-cache");
     pompeiiClient.println("Cache-Control: no-cache");
     pompeiiClient.println("Connection: close");
-    pompeiiClient.println("X-Data-Source: HOT_WATER");
     pompeiiClient.println();
 
     pompeiiClient.println(postData);
     pompeiiClient.println();
 
+    delay(10);
     pompeiiClient.stop();
     pompeiiClient.flush();
     Serial.println("Called pompeii");
@@ -224,10 +212,9 @@ void sendResultsToPompeii() {
 String getPostData()
 {
   double averagedTemperature = calculateAverageTemperatureOverPeriod();
-  Serial.print("temp to post is: ");
-  Serial.println(averagedTemperature);
+  Serial.print("temp to post is: " + String(averagedTemperature));
 
   char tempChar[10];
-  dtostrf(averagedTemperature,3,2,tempChar);
-  return "t=" + String(tempChar) + "&i=" + getPeriodImmersionOnOffStatus();
+  dtostrf(averagedTemperature, 3, 2, tempChar);
+  return "{\"t\":" + String(tempChar) + ",\"i\":" + getPeriodImmersionOnOffStatus() + "}";
 }
