@@ -13,12 +13,11 @@ const double temperatureOffset = 0.0;
 const double temperatureMultiplier = 1.252;
 const double temperatureCalculationOffset = 1.188;
 
-
 ///////// CHANGEABLE VALUES ABOVE /////////
 
 EthernetClient pompeiiClient;
 byte mac[] = {
-  0x90, 0xA0, 0xDA, 0x0E, 0x9B, 0xE6};
+  0x90, 0xA0, 0xDA, 0x0E, 0x9B, 0xE5};
 char pompeiiService[] = "/pvoutput-post-temp.php";
 
 long counter = 1L;
@@ -38,11 +37,11 @@ unsigned long minutesInHour = 60;
 unsigned long timeBetweenCalls = minutesBetweenCalls * millisecondsPerMinute;
 
 
-// taos sensor
-const int taosSensorPin = A5;
+// immersion sensor
+const int immersionSensorPin = A5;
 unsigned long onCount = 0L;
 unsigned long offCount = 0L;
-unsigned int threshold = 500L;
+unsigned int threshold = 20L;
 
 void setup() {
   Serial.begin(9600);
@@ -81,7 +80,6 @@ void loop() {
   readTemperatureSensorValue();
   readImmersionPlugSensorValue();
 
-  //getTimeFromPompeii();
   if (isTimeToUploadData())
   {
     Serial.println("Uploading data");
@@ -94,8 +92,7 @@ void loop() {
 
 void readImmersionPlugSensorValue()
 {
-  int sensorVal = analogRead(taosSensorPin);
-  //Serial.println(sensorVal);
+  int sensorVal = analogRead(immersionSensorPin);
 
   calculateOnOffStatus(sensorVal);
 }
