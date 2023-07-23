@@ -5,6 +5,7 @@
 
 const char serverAddress[] = "home-monitoring.scaleys.co.uk";
 const int serverPort = 80;
+const int httpRequestDelay = 15;
 
 const char serviceEndpoint[] = "/hotwater";
 
@@ -32,12 +33,6 @@ const double milliVolts = 100.0;
 // timing stuff
 unsigned long lastTimeUploaded = millis();
 unsigned long previousTime = 0UL;
-
-// immersion sensor
-const int immersionSensorPin = A5;
-unsigned long onCount = 0L;
-unsigned long offCount = 0L;
-const unsigned int threshold = 20L;
 
 void setup() {
   Serial.begin(9600);
@@ -76,7 +71,6 @@ void connectToEthernet()
 
 void loop() {
   readTemperatureSensorValue();
-  readImmersionPlugSensorValue();
 
   if (isTimeToUploadData())
   {
@@ -86,31 +80,6 @@ void loop() {
   }
 
   delay(1);
-}
-
-void readImmersionPlugSensorValue()
-{
-  int sensorVal = analogRead(immersionSensorPin);
-
-  calculateOnOffStatus(sensorVal);
-}
-
-void resetImmersionPlugSensorCounts()
-{
-  onCount = 0L;
-  offCount = 0L;
-}
-
-void calculateOnOffStatus(int sensorVal)
-{
-  if ( sensorVal < threshold)
-  {
-    offCount++;
-  }
-  else
-  {
-    onCount++;
-  }
 }
 
 boolean isTimeToUploadData() {
@@ -130,18 +99,6 @@ boolean isTimeToUploadData() {
   return false;
 }
 
-int getPeriodImmersionOnOffStatus()
-{
-  Serial.println("On Count: " + String(onCount) + " Off Count: " + String(offCount));
-
-  if (onCount > offCount)
-  {
-    return 10;
-  }
-
-  return 0;
-}
-
 /* Reads the temperature sensor */
 void readTemperatureSensorValue() {
   int sensorVal = analogRead(temperatureSensorPin);
@@ -152,7 +109,6 @@ void readTemperatureSensorValue() {
 void resetReadingsAfterUpload()
 {
   resetTemperatureSensorCounts();
-  resetImmersionPlugSensorCounts();
 }
 
 void resetTemperatureSensorCounts()
@@ -202,7 +158,7 @@ void sendResultsToServer() {
     ethernetClient.println(postData);
     ethernetClient.println();
 
-    delay(10);
+    delay(httpRequestDelay);
     ethernetClient.stop();
     ethernetClient.flush();
     Serial.println("Called server");
@@ -216,5 +172,5 @@ String getPostData()
 
   char tempChar[10];
   dtostrf(averagedTemperature, 3, 2, tempChar);
-  return "{\"t\":" + String(tempChar) + ",\"i\":" + getPeriodImmersionOnOffStatus() + "}";
+  return "{\"t\":" + String(tempChar) + "}";
 }
