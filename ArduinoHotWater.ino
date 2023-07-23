@@ -3,10 +3,10 @@
 
 ///////// CHANGEABLE VALUES /////////
 
-const char pompeii[] = "192.168.0.16";
-const int pompeiiPort = 28080;
+const char serverAddress[] = "home-monitoring.scaleys.co.uk";
+const int serverPort = 80;
 
-const char pompeiiService[] = "/hotwater";
+const char serviceEndpoint[] = "/hotwater";
 
 const unsigned long millisecondsBetweenCalls = 60000L;
 
@@ -17,7 +17,7 @@ const double temperatureCalculationOffset = 1.188;
 
 ///////// CHANGEABLE VALUES ABOVE /////////
 
-EthernetClient pompeiiClient;
+EthernetClient ethernetClient;
 const byte mac[] = {0x90, 0xA0, 0xDA, 0x0E, 0x9B, 0xE5};
 
 unsigned long counter = 1L;
@@ -81,7 +81,7 @@ void loop() {
   if (isTimeToUploadData())
   {
     Serial.println("Uploading data");
-    sendResultsToPompeii();
+    sendResultsToServer();
     resetReadingsAfterUpload();
   }
 
@@ -181,31 +181,31 @@ double averageSensorVal()
   return (double)cReadings / (double)counter;
 }
 
-void sendResultsToPompeii() {
-  Serial.println("sendResultsToPompeii");
+void sendResultsToServer() {
+  Serial.println("sendResultsToServer");
 
   String postData = getPostData();
   Serial.println("post data: " + postData);
 
-  if (pompeiiClient.connect(pompeii, pompeiiPort)) {
-    Serial.println("connected to pompeii");
+  if (ethernetClient.connect(serverAddress, serverPort)) {
+    Serial.println("connected to server");
     // Make a HTTP request:
-    pompeiiClient.println("POST " + String(pompeiiService) + " HTTP/1.1");
-    pompeiiClient.println("Host: " + String(pompeii) + ":" + pompeiiPort);
-    pompeiiClient.println("Content-Type: application/json");
-    pompeiiClient.println("Content-Length: " + String(postData.length()));
-    pompeiiClient.println("Pragma: no-cache");
-    pompeiiClient.println("Cache-Control: no-cache");
-    pompeiiClient.println("Connection: close");
-    pompeiiClient.println();
+    ethernetClient.println("POST " + String(serviceEndpoint) + " HTTP/1.1");
+    ethernetClient.println("Host: " + String(serverAddress) + ":" + serverPort);
+    ethernetClient.println("Content-Type: application/json");
+    ethernetClient.println("Content-Length: " + String(postData.length()));
+    ethernetClient.println("Pragma: no-cache");
+    ethernetClient.println("Cache-Control: no-cache");
+    ethernetClient.println("Connection: close");
+    ethernetClient.println();
 
-    pompeiiClient.println(postData);
-    pompeiiClient.println();
+    ethernetClient.println(postData);
+    ethernetClient.println();
 
     delay(10);
-    pompeiiClient.stop();
-    pompeiiClient.flush();
-    Serial.println("Called pompeii");
+    ethernetClient.stop();
+    ethernetClient.flush();
+    Serial.println("Called server");
   }
 }
 
