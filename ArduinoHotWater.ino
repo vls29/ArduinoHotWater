@@ -3,10 +3,11 @@
 
 ///////// CHANGEABLE VALUES /////////
 
-const char pompeii[] = "192.168.0.16";
-const int pompeiiPort = 28080;
+const char serverAddress[] = "home-monitoring.scaleys.co.uk";
+const int serverPort = 80;
+const int httpRequestDelay = 15;
 
-const char pompeiiService[] = "/hotwater";
+const char serviceEndpoint[] = "/hotwater";
 
 const unsigned long millisecondsBetweenCalls = 60000L;
 
@@ -17,7 +18,7 @@ const double temperatureCalculationOffset = 1.188;
 
 ///////// CHANGEABLE VALUES ABOVE /////////
 
-EthernetClient pompeiiClient;
+EthernetClient ethernetClient;
 const byte mac[] = {0x90, 0xA0, 0xDA, 0x0E, 0x9B, 0xE5};
 
 unsigned long counter = 1L;
@@ -32,12 +33,6 @@ const double milliVolts = 100.0;
 // timing stuff
 unsigned long lastTimeUploaded = millis();
 unsigned long previousTime = 0UL;
-
-// immersion sensor
-const int immersionSensorPin = A5;
-unsigned long onCount = 0L;
-unsigned long offCount = 0L;
-const unsigned int threshold = 20L;
 
 void setup() {
   Serial.begin(9600);
@@ -76,41 +71,15 @@ void connectToEthernet()
 
 void loop() {
   readTemperatureSensorValue();
-  readImmersionPlugSensorValue();
 
   if (isTimeToUploadData())
   {
     Serial.println("Uploading data");
-    sendResultsToPompeii();
+    sendResultsToServer();
     resetReadingsAfterUpload();
   }
 
   delay(1);
-}
-
-void readImmersionPlugSensorValue()
-{
-  int sensorVal = analogRead(immersionSensorPin);
-
-  calculateOnOffStatus(sensorVal);
-}
-
-void resetImmersionPlugSensorCounts()
-{
-  onCount = 0L;
-  offCount = 0L;
-}
-
-void calculateOnOffStatus(int sensorVal)
-{
-  if ( sensorVal < threshold)
-  {
-    offCount++;
-  }
-  else
-  {
-    onCount++;
-  }
 }
 
 boolean isTimeToUploadData() {
@@ -130,18 +99,6 @@ boolean isTimeToUploadData() {
   return false;
 }
 
-int getPeriodImmersionOnOffStatus()
-{
-  Serial.println("On Count: " + String(onCount) + " Off Count: " + String(offCount));
-
-  if (onCount > offCount)
-  {
-    return 10;
-  }
-
-  return 0;
-}
-
 /* Reads the temperature sensor */
 void readTemperatureSensorValue() {
   int sensorVal = analogRead(temperatureSensorPin);
@@ -152,7 +109,6 @@ void readTemperatureSensorValue() {
 void resetReadingsAfterUpload()
 {
   resetTemperatureSensorCounts();
-  resetImmersionPlugSensorCounts();
 }
 
 void resetTemperatureSensorCounts()
@@ -181,31 +137,31 @@ double averageSensorVal()
   return (double)cReadings / (double)counter;
 }
 
-void sendResultsToPompeii() {
-  Serial.println("sendResultsToPompeii");
+void sendResultsToServer() {
+  Serial.println("sendResultsToServer");
 
   String postData = getPostData();
   Serial.println("post data: " + postData);
 
-  if (pompeiiClient.connect(pompeii, pompeiiPort)) {
-    Serial.println("connected to pompeii");
+  if (ethernetClient.connect(serverAddress, serverPort)) {
+    Serial.println("connected to server");
     // Make a HTTP request:
-    pompeiiClient.println("POST " + String(pompeiiService) + " HTTP/1.1");
-    pompeiiClient.println("Host: " + String(pompeii) + ":" + pompeiiPort);
-    pompeiiClient.println("Content-Type: application/json");
-    pompeiiClient.println("Content-Length: " + String(postData.length()));
-    pompeiiClient.println("Pragma: no-cache");
-    pompeiiClient.println("Cache-Control: no-cache");
-    pompeiiClient.println("Connection: close");
-    pompeiiClient.println();
+    ethernetClient.println("POST " + String(serviceEndpoint) + " HTTP/1.1");
+    ethernetClient.println("Host: " + String(serverAddress) + ":" + serverPort);
+    ethernetClient.println("Content-Type: application/json");
+    ethernetClient.println("Content-Length: " + String(postData.length()));
+    ethernetClient.println("Pragma: no-cache");
+    ethernetClient.println("Cache-Control: no-cache");
+    ethernetClient.println("Connection: close");
+    ethernetClient.println();
 
-    pompeiiClient.println(postData);
-    pompeiiClient.println();
+    ethernetClient.println(postData);
+    ethernetClient.println();
 
-    delay(10);
-    pompeiiClient.stop();
-    pompeiiClient.flush();
-    Serial.println("Called pompeii");
+    delay(httpRequestDelay);
+    ethernetClient.stop();
+    ethernetClient.flush();
+    Serial.println("Called server");
   }
 }
 
@@ -216,5 +172,5 @@ String getPostData()
 
   char tempChar[10];
   dtostrf(averagedTemperature, 3, 2, tempChar);
-  return "{\"t\":" + String(tempChar) + ",\"i\":" + getPeriodImmersionOnOffStatus() + "}";
+  return "{\"t\":" + String(tempChar) + "}";
 }
